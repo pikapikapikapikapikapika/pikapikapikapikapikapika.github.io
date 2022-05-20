@@ -1,0 +1,370 @@
+<html>
+  <head>
+    <script>
+      const TOWER_COORDS = {
+        0: {x: 100, y: 82},
+        1: {x: 109, y: 84.41},
+        2: {x: 115, y: 91},
+        3: {x: 118, y: 100},
+        4: {x: 115, y: 109},
+        5: {x: 109, y: 115.59},
+        6: {x: 100, y: 118},
+        7: {x: 91, y: 115.59},
+        8: {x: 84.41, y: 109},
+        9: {x: 82, y: 100},
+        10: {x: 84.41, y: 91},
+        11: {x: 91, y: 84.41},
+        12: {x: 95.76, y: 95.76},
+        13: {x: 104.24, y: 95.76},
+        14: {x: 104.24, y: 104.24},
+        15: {x: 95.76, y: 104.24},
+      };
+
+      const ALL_TOWERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+      const OUTER_TOWERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+      const NORTH_TOWERS = [11, 0, 1];
+      const EAST_TOWERS = [2, 3, 4];
+      const SOUTH_TOWERS = [5, 6, 7];
+      const WEST_TOWERS = [8, 9, 10];
+      const INNER_TOWERS = [12, 13, 14, 15];
+
+      const MAX_OUTER_TOWERS = 6;
+      const MAX_INNER_TOWERS = 3;
+      const MAX_ALL_TOWERS = 8;
+
+      const active_outer_towers = new Set();
+      const active_inner_towers = new Set();
+
+      const guessSolution = () => {
+        const towers = [];
+        active_outer_towers.forEach(t => towers.push(TOWER_COORDS[t]));
+        active_inner_towers.forEach(t => towers.push(TOWER_COORDS[t]));
+        const solution = solve(towers);
+        if (solution) {
+          const quad1 = Math.floor(((solution[0] + 1) / 3));
+          const dir1 = (solution[0] + 1) % 3;
+          const quad2 = Math.floor((solution[1] + 1) / 3);
+          const dir2 = (solution[1] + 1) % 3;
+          const quadrants = {
+            0: 'North',
+            1: 'East',
+            2: 'South',
+            3: 'West',
+            4: 'North'
+          };
+          const direction = {
+            0: 'Left',
+            1: 'Middle',
+            2: 'Right',
+          };
+          
+          document.getElementById('solution').textContent = (
+            `${quadrants[quad1]} - ${direction[dir1]}\n${quadrants[quad2]} - ${direction[dir2]}`
+          );
+        } else {
+          document.getElementById('solution').textContent = 'No solution found :(';
+        }
+      };
+
+      const showSolution = (text) => {
+        document.getElementById('solution').textContent = text;
+      }
+
+      const solve = (towers) => {
+        const outer_towers = [];
+        towers.forEach(tower => {
+          const x = tower.x - 100;
+          const y = tower.y - 100;
+          if (x !== y && -x !== y) { // ignore inner towers
+            outer_towers.push(Math.round(6 - 6 * Math.atan2(x, y) / Math.PI) % 12);
+          }
+        });
+
+        // look for opposite towers.
+        const ne_towers = [11, 0, 1, 2, 3, 4];
+        for (let i = 0; i < 6; i++) {
+          if (outer_towers.includes(ne_towers[i]) && outer_towers.includes((ne_towers[i] + 6) % 12)) {
+            return [ne_towers[i], (ne_towers[i] + 6) % 12];
+          }
+        }
+
+        // look for a middle tower
+        const middle_towers = [0, 6, 3, 9];
+        const middle_to_opposite = {
+          0: SOUTH_TOWERS,
+          6: NORTH_TOWERS,
+          3: WEST_TOWERS,
+          9: EAST_TOWERS,
+        };
+        for (let i = 0; i < 4; i++) {
+          if (outer_towers.includes(middle_towers[i])) {
+            opposing_tower = middle_to_opposite[middle_towers[i]].filter((t) => outer_towers.includes(t))[0];
+            return middle_towers[i] == 0 || middle_towers[i] == 3
+              ? [middle_towers[i], opposing_tower]
+              : [opposing_tower, middle_towers[i]];
+          }
+        }
+        return null;
+      };
+
+      const clearTowers = () => {
+        active_outer_towers.clear();
+        active_inner_towers.clear();
+        updateTowerStates();
+      };
+
+      const randomizeTowers = () => {
+        clearTowers();
+
+        const remaining_north_towers = NORTH_TOWERS.slice();
+        const remaining_east_towers = EAST_TOWERS.slice();
+        const remaining_south_towers = SOUTH_TOWERS.slice();
+        const remaining_west_towers = WEST_TOWERS.slice();
+        const remaining_outer_towers = [
+          remaining_north_towers,
+          remaining_east_towers,
+          remaining_south_towers,
+          remaining_west_towers,
+        ];
+
+        const remaining_inner_towers = INNER_TOWERS.slice();
+
+        // pick a tower from each quadrant
+        remaining_outer_towers.map(towers => {
+          const tower = towers[Math.floor(Math.random() * 3)]
+          towers.splice(towers.indexOf(tower), 1);
+          active_outer_towers.add(tower);
+        });
+
+        // decide if 2 or 3 inner towers
+        const inner_tower_count = 2 + Math.floor(Math.random() * 2);
+
+        // pick inner towers
+        remaining_inner_towers.sort(() => Math.random() - 0.5);
+        for (let i = 0; i < inner_tower_count; i++) {
+          active_inner_towers.add(remaining_inner_towers[i]);
+        }
+
+        // pick remaining outer towers
+        remaining_outer_towers.sort(() => Math.random() - 0.5);
+        for (let i = 0; i < 4 - inner_tower_count; i++) {
+          remaining_outer_towers[i].sort(() => Math.random() - 0.5)
+          active_outer_towers.add(remaining_outer_towers[i][0]);
+        }
+
+        updateTowerStates();
+      };
+
+      const toggleTower = (id) => {
+        const active_towers = OUTER_TOWERS.includes(id) ? active_outer_towers : active_inner_towers;
+        if (active_towers.has(id)) {
+          active_towers.delete(id);
+        } else {
+          addTower(id);
+        }
+        updateTowerStates();
+      };
+
+      const addTower = (id) => {
+        const outer_tower_count = active_outer_towers.size;
+        const inner_tower_count = active_inner_towers.size;
+
+        if (OUTER_TOWERS.includes(id)) {
+          const quadrant = [NORTH_TOWERS, EAST_TOWERS, SOUTH_TOWERS, WEST_TOWERS].find(q => q.includes(id));
+          if (
+            outer_tower_count < MAX_OUTER_TOWERS &&
+            outer_tower_count + inner_tower_count < MAX_ALL_TOWERS &&
+            quadrant.filter(t => active_outer_towers.has(t)).length < 2
+          ) {
+            active_outer_towers.add(id);
+          }
+        } else if (
+          INNER_TOWERS.includes(id) &&
+          inner_tower_count < MAX_INNER_TOWERS &&
+          outer_tower_count + inner_tower_count < MAX_ALL_TOWERS
+        ) {
+          active_inner_towers.add(id);
+        }
+      };
+
+      const updateTowerStates = () => {
+        OUTER_TOWERS.forEach((id) => {
+          const tower = document.getElementById(`t${id}`);
+          if (tower) {
+            if (active_outer_towers.has(id)) {
+              tower.classList.add('active');
+            } else {
+              tower.classList.remove('active');
+            }
+          }
+        });
+        INNER_TOWERS.forEach((id) => {
+          const tower = document.getElementById(`t${id}`);
+          if (tower) {
+            if (active_inner_towers.has(id)) {
+              tower.classList.add('active');
+            } else {
+              tower.classList.remove('active');
+            }
+          }
+        });
+      };
+
+    </script>
+    <style>
+      body {
+        font: 20px Arial, sans-serif;
+      }
+
+      .container {
+        margin: 10px;
+        display: flex;
+        flex-direction: 'row';
+      }
+
+      .controls {
+        margin-left: 10px;
+      }
+
+      .solution {
+        margin-bottom: 10px;
+        white-space: pre-line;
+      }
+
+      .sim {
+        position: relative;
+      }
+
+      .arena {
+        background-color: lightblue;
+        height: 496px;
+        width:  496px;
+        border: 2px solid black;
+        border-radius: 300px;
+      }
+
+      .tower {
+        position: absolute;
+        height: 46px;
+        width:  46px;
+        border: 2px solid gray;
+        border-radius: 30px;
+        z-index: 1;
+      }
+
+      .active {
+        background-color: orange;
+      }
+
+      #t0 {
+        top: 25px;
+        left: 225px;
+      }
+
+      #t1 {
+        top: 46px;
+        left: 314px;
+      }
+
+      #t2 {
+        top: 136px;
+        left: 404px;
+      }
+
+      #t3 {
+        top: 225px;
+        left: 425px;
+      }
+
+      #t4 {
+        top: 314px;
+        left: 404px;
+      }
+
+      #t5 {
+        top: 404px;
+        left: 314px;
+      }
+
+      #t6 {
+        top: 425px;
+        left: 225px;
+      }
+
+      #t7 {
+        top: 404px;
+        left: 136px;
+      }
+
+      #t8 {
+        top: 314px;
+        left: 46px;
+      }
+
+      #t9 {
+        top: 225px;
+        left: 25px;
+      }
+
+      #t10 {
+        top: 136px;
+        left: 46px;
+      }
+
+      #t11 {
+        top: 46px;
+        left: 136px;
+      }
+
+      #t12 {
+        top: 190px;
+        left: 190px;
+      }
+
+      #t13 {
+        top: 260px;
+        left: 190px;
+      }
+
+      #t14 {
+        top: 260px;
+        left: 260px;
+      }
+
+      #t15 {
+        top: 190px;
+        left: 260px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <div class='sim'>
+        <div class='arena'></div>
+        <div id='t0' class='tower' onclick='toggleTower(0)'></div>
+        <div id='t1' class='tower' onclick='toggleTower(1)'></div>
+        <div id='t2' class='tower' onclick='toggleTower(2)'></div>
+        <div id='t3' class='tower' onclick='toggleTower(3)'></div>
+        <div id='t4' class='tower' onclick='toggleTower(4)'></div>
+        <div id='t5' class='tower' onclick='toggleTower(5)'></div>
+        <div id='t6' class='tower' onclick='toggleTower(6)'></div>
+        <div id='t7' class='tower' onclick='toggleTower(7)'></div>
+        <div id='t8' class='tower' onclick='toggleTower(8)'></div>
+        <div id='t9' class='tower' onclick='toggleTower(9)'></div>
+        <div id='t10' class='tower' onclick='toggleTower(10)'></div>
+        <div id='t11' class='tower' onclick='toggleTower(11)'></div>
+        <div id='t12' class='tower' onclick='toggleTower(12)'></div>
+        <div id='t13' class='tower' onclick='toggleTower(13)'></div>
+        <div id='t14' class='tower' onclick='toggleTower(14)'></div>
+        <div id='t15' class='tower' onclick='toggleTower(15)'></div>
+      </div>
+      <div class='controls'>
+        <button onclick='clearTowers()'>Clear</button>
+        <button onclick='randomizeTowers()'>Randomize</button>
+        <button onclick='guessSolution()'>Solve</button>
+        <pre id='solution'></pre>
+      </div>
+    </div>
+  </body>
+</html>
